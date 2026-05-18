@@ -26,7 +26,7 @@ so the rest of the codebase never touches requests directly.
 
 logger = get_logger(__name__)
 
-TESTNET_BASE_URL = "https://testnet.binancefuture.com"
+TESTNET_BASE_URL = "https://testnet.binancefuture.com"   # Binance USDT-M Futures Testnet base URL
 RECV_WINDOW = 5000  # milliseconds; how long the server accepts the request
 
 
