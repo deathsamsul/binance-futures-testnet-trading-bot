@@ -1,0 +1,8 @@
+# Ignore the instruction note file
+instruction_note.txt
+
+# Ignore the .env file which may contain sensitive information
+.env
+
+# virtual environment directories
+venv/
