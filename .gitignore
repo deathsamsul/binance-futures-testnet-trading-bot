@@ -6,3 +6,4 @@ instruction_note.txt
 
 # virtual environment directories
 venv/
+.venv
