@@ -28,6 +28,7 @@ Sits between the CLI and the raw API client.  Responsibilities:
 
 
 
+
 logger = get_logger(__name__)
 
 # Dedicated trade-history logger (writes to logs/trade_history.log)
@@ -42,8 +43,8 @@ class OrderResult:
         self,
         success: bool,
         raw_response: dict | None = None,
-        error_message: str | None = None,
-    ):
+        error_message: str | None = None,):
+        
         self.success = success
         self.raw = raw_response or {}
         self.error_message = error_message
