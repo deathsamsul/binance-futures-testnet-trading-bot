@@ -1,35 +1,55 @@
 from __future__ import annotations
 import logging
-import os
 import sys
 import click
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich import box
-from bot.client import BinanceFuturesClient, BinanceClientError, NetworkError
-from bot.logging_config import setup_logging, get_logger
-from bot.orders import place_order, OrderResult
+from bot.client import BinanceClientError, BinanceFuturesClient, NetworkError
+from bot.logging_config import get_logger, setup_logging
+from bot.orders import OrderResult, place_order
 
 
+
+
+
+"""
+cli.py — Command-line entry point for the Binance Futures Trading Bot.
+Lives at the PROJECT ROOT (trading_bot/cli.py), one level above the bot/
+package, matching the task's suggested project structure exactly.
+Sub-commands
+------------
+  place   — Place MARKET or LIMIT orders (core requirement).
+  balance — Show futures account balances.
+  price   — Show the current mark price for a symbol.
+  ping    — Check connectivity to the testnet.
+Global flags
+------------
+  --api-key    / env BINANCE_API_KEY
+  --api-secret / env BINANCE_API_SECRET
+  --base-url              (default: https://testnet.binancefuture.com)
+  --log-level             DEBUG | INFO | WARNING | ERROR
+Run from project root:
+    python cli.py place --symbol BTCUSDT --side BUY --type MARKET --quantity 0.001
+"""
 
 console = Console()
 logger = get_logger(__name__)
 
 
 
+
+
 # TODO: Add `cancel` sub-command (cancel an open order by orderId).
 # TODO: Add `status` sub-command (query order status by orderId).
-# TODO: Add `history` sub-command (read and display trade_history.log).
-# TODO: Add interactive menu mode (blessed / rich prompts) for bonus UX.
+# TODO: Add `history` sub-command (read and pretty-print trade_history.log).
+# TODO: Add interactive menu mode (rich Prompt / questionary) for bonus UX.
 # TODO: Add `--config` flag pointing to a TOML/YAML config file.
 
-
-
-# Shared context helpers
-
+# Helpers
 def _make_client(ctx: click.Context) -> BinanceFuturesClient:
-    """Pull credentials from context and return an authenticated client."""
+    """Construct an authenticated client from the shared Click context."""
     return BinanceFuturesClient(
         api_key=ctx.obj["api_key"],
         api_secret=ctx.obj["api_secret"],
@@ -38,58 +58,70 @@ def _make_client(ctx: click.Context) -> BinanceFuturesClient:
 
 
 def _print_order_result(result: OrderResult, request_summary: dict) -> None:
-    """Pretty-print order request + response using Rich."""
-    # --- Request table ---
-    req_table = Table(title="  Order Request", box=box.ROUNDED, show_header=False)
-    req_table.add_column("Field", style="bold cyan")
+    """Render the order request + API response as Rich tables."""
+
+    # ── Request summary ──────────────────────────────────────────────────
+    req_table = Table(
+        title="[bold]Order Request[/bold]",
+        box=box.ROUNDED,
+        show_header=False,
+        title_style="cyan",
+    )
+    req_table.add_column("Field", style="bold cyan", no_wrap=True)
     req_table.add_column("Value", style="white")
     for k, v in request_summary.items():
         req_table.add_row(k, str(v) if v is not None else "—")
     console.print(req_table)
 
     if result.success:
-        # --- Response table ---
-        summary = result.summary()
-        res_table = Table(title="  Order Response", box=box.ROUNDED, show_header=False)
-        res_table.add_column("Field", style="bold green")
+        # ── Response details ──────────────────────────────────────────────
+        res_table = Table(
+            title="[bold]Order Response[/bold]",
+            box=box.ROUNDED,
+            show_header=False,
+            title_style="green",
+        )
+        res_table.add_column("Field", style="bold green", no_wrap=True)
         res_table.add_column("Value", style="white")
-        for k, v in summary.items():
+        for k, v in result.summary().items():
             if k == "success":
                 continue
             res_table.add_row(k, str(v))
         console.print(res_table)
+
         console.print(
             Panel(
-                f"[bold green] Order placed successfully![/bold green]  "
-                f"ID: [yellow]{result.order_id}[/yellow]  "
+                f"[bold green]  Order placed successfully![/bold green]  "
+                f"Order ID: [yellow]{result.order_id}[/yellow]   "
                 f"Status: [cyan]{result.status}[/cyan]",
                 border_style="green",
             )
         )
-        logger.info("Order successfully displayed to user | orderId=%s", result.order_id)
+        logger.info("Order result displayed | orderId=%s status=%s", result.order_id, result.status)
+
     else:
         console.print(
             Panel(
-                f"[bold red] Order failed:[/bold red] {result.error_message}",
+                f"[bold red]  Order failed:[/bold red]  {result.error_message}",
                 border_style="red",
             )
         )
-        logger.error("Order failure displayed to user: %s", result.error_message)
+        logger.error("Order failure displayed: %s", result.error_message)
 
 
-# Root group
+# Root group---------------------------------
 @click.group()
 @click.option(
     "--api-key",
     envvar="BINANCE_API_KEY",
     required=True,
-    help="Binance Futures API key (or set BINANCE_API_KEY env var).",
+    help="Binance API key  (or set BINANCE_API_KEY env var).",
 )
 @click.option(
     "--api-secret",
     envvar="BINANCE_API_SECRET",
     required=True,
-    help="Binance Futures API secret (or set BINANCE_API_SECRET env var).",
+    help="Binance API secret  (or set BINANCE_API_SECRET env var).",
 )
 @click.option(
     "--base-url",
@@ -107,31 +139,27 @@ def _print_order_result(result: OrderResult, request_summary: dict) -> None:
     help="Console log verbosity.",
 )
 @click.pass_context
-def cli(ctx: click.Context, api_key: str, api_secret: str, base_url: str, log_level: str):
+def cli(
+    ctx: click.Context,
+    api_key: str,
+    api_secret: str,
+    base_url: str,
+    log_level: str,
+) -> None:
     """
     \b
     ╔══════════════════════════════════════════╗
-    ║  Binance Futures Testnet Trading Bot     ║
-    ║  Author : Samsul Hoque Mondal            ║
-    ║  Target : USDT-M Futures Testnet         ║
+    ║   Binance Futures Testnet Trading Bot    ║
+    ║   USDT-M Futures — Testnet only          ║
     ╚══════════════════════════════════════════╝
 
     \b
-    Examples:
-      # Place a MARKET BUY
-      trading-bot place --symbol BTCUSDT --side BUY --type MARKET --quantity 0.001
-
-      # Place a LIMIT SELL
-      trading-bot place --symbol ETHUSDT --side SELL --type LIMIT --quantity 0.01 --price 3500
-
-      # Check balance
-      trading-bot balance
-
-      # Show mark price
-      trading-bot price --symbol BTCUSDT
-
-      # Connectivity check
-      trading-bot ping
+    Quick examples:
+      python cli.py place --symbol BTCUSDT --side BUY --type MARKET --quantity 0.001
+      python cli.py place --symbol ETHUSDT --side SELL --type LIMIT --quantity 0.01 --price 3500
+      python cli.py balance
+      python cli.py price --symbol BTCUSDT
+      python cli.py ping
     """
     setup_logging(
         console_level=getattr(logging, log_level.upper()),
@@ -141,27 +169,35 @@ def cli(ctx: click.Context, api_key: str, api_secret: str, base_url: str, log_le
     ctx.obj["api_key"] = api_key
     ctx.obj["api_secret"] = api_secret
     ctx.obj["base_url"] = base_url
-    logger.debug(
-        "CLI started | base_url=%s log_level=%s", base_url, log_level
-    )
+    logger.debug("CLI started | base_url=%s log_level=%s", base_url, log_level)
 
 
-# `place` sub-command
+
+# `place` — core requirement--------------------------------
+
 @cli.command("place")
-@click.option("--symbol",   required=True, help="Trading pair, e.g. BTCUSDT.")
-@click.option("--side",     required=True,
-              type=click.Choice(["BUY", "SELL"], case_sensitive=False),
-              help="Order direction.")
-@click.option("--type",     "order_type", required=True,
-              type=click.Choice(["MARKET", "LIMIT"], case_sensitive=False),
-              help="Order type.")
-@click.option("--quantity", required=True, help="Contract quantity.")
-@click.option("--price",    default=None,  help="Limit price (required for LIMIT orders).")
-@click.option("--tif",      default="GTC",
-              type=click.Choice(["GTC", "IOC", "FOK"], case_sensitive=False),
-              help="Time-in-force (LIMIT only). Default: GTC.")
-@click.option("--dry-run",  is_flag=True, default=False,
-              help="Validate inputs only; do NOT send to the API.")
+@click.option("--symbol",      required=True, help="Trading pair, e.g. BTCUSDT.")
+@click.option(
+    "--side", required=True,
+    type=click.Choice(["BUY", "SELL"], case_sensitive=False),
+    help="Order direction.",
+)
+@click.option(
+    "--type", "order_type", required=True,
+    type=click.Choice(["MARKET", "LIMIT"], case_sensitive=False),
+    help="Order type.",
+)
+@click.option("--quantity", required=True, help="Contract quantity (e.g. 0.001).")
+@click.option("--price",    default=None,  help="Limit price — required for LIMIT orders.")
+@click.option(
+    "--tif", default="GTC",
+    type=click.Choice(["GTC", "IOC", "FOK"], case_sensitive=False),
+    help="Time-in-force for LIMIT orders. Default: GTC.",
+)
+@click.option(
+    "--dry-run", is_flag=True, default=False,
+    help="Validate inputs only; do NOT send to the API.",
+)
 @click.pass_context
 def place(
     ctx: click.Context,
@@ -172,25 +208,30 @@ def place(
     price: str | None,
     tif: str,
     dry_run: bool,
-):
+) -> None:
     """Place a MARKET or LIMIT order on USDT-M Futures Testnet."""
-    symbol = symbol.upper()
-    side = side.upper()
+    symbol     = symbol.upper()
+    side       = side.upper()
     order_type = order_type.upper()
 
+    price_display = (
+        price if price
+        else ("— (market price)" if order_type == "MARKET" else "[red]⚠ MISSING[/red]")
+    )
+
     request_summary = {
-        "Symbol":     symbol,
-        "Side":       side,
-        "Type":       order_type,
-        "Quantity":   quantity,
-        "Price":      price or ("— (market)" if order_type == "MARKET" else "⚠️ MISSING"),
-        "TIF":        tif if order_type == "LIMIT" else "—",
-        "DryRun":     "Yes" if dry_run else "No",
+        "Symbol":   symbol,
+        "Side":     side,
+        "Type":     order_type,
+        "Quantity": quantity,
+        "Price":    price_display,
+        "TIF":      tif if order_type == "LIMIT" else "—",
+        "Dry-run":  "Yes — order will NOT be sent" if dry_run else "No",
     }
 
     logger.info(
-        "User initiated 'place' | %s",
-        " | ".join(f"{k}={v}" for k, v in request_summary.items()),
+        "place command | symbol=%s side=%s type=%s qty=%s price=%s tif=%s dry_run=%s",
+        symbol, side, order_type, quantity, price, tif, dry_run,
     )
 
     with _make_client(ctx) as client:
@@ -209,12 +250,12 @@ def place(
     sys.exit(0 if result.success else 1)
 
 
-# `balance` sub-command
+# `balance`----------------------------------------
 @cli.command("balance")
 @click.pass_context
-def balance(ctx: click.Context):
+def balance(ctx: click.Context) -> None:
     """Show futures account asset balances."""
-    logger.info("User requested account balance.")
+    logger.info("balance command called.")
     with _make_client(ctx) as client:
         try:
             balances = client.get_account_balance()
@@ -223,22 +264,22 @@ def balance(ctx: click.Context):
             logger.error("Balance fetch failed: %s", exc)
             sys.exit(1)
 
-    # Filter non-zero balances for readability
+    # Only show assets with a non-zero balance
     # TODO: add --all flag to show zero balances too
     nonzero = [b for b in balances if float(b.get("balance", 0)) != 0]
 
     if not nonzero:
-        console.print("[yellow]No non-zero balances found.[/yellow]")
+        console.print("[yellow]No non-zero balances found on this testnet account.[/yellow]")
         return
 
-    tbl = Table(title="  Futures Account Balances", box=box.ROUNDED)
-    tbl.add_column("Asset", style="bold cyan")
-    tbl.add_column("Balance", justify="right")
-    tbl.add_column("Available", justify="right")
+    tbl = Table(title="Futures Account Balances", box=box.ROUNDED)
+    tbl.add_column("Asset",         style="bold cyan")
+    tbl.add_column("Balance",       justify="right")
+    tbl.add_column("Available",     justify="right")
     tbl.add_column("Unrealised PnL", justify="right")
 
     for b in nonzero:
-        upnl = float(b.get("crossUnPnl", 0))
+        upnl  = float(b.get("crossUnPnl", 0))
         color = "green" if upnl >= 0 else "red"
         tbl.add_row(
             b.get("asset", "?"),
@@ -250,14 +291,14 @@ def balance(ctx: click.Context):
     console.print(tbl)
 
 
-# `price` sub-command
+# `price`-----------------------
 @cli.command("price")
 @click.option("--symbol", required=True, help="Trading pair, e.g. BTCUSDT.")
 @click.pass_context
-def price(ctx: click.Context, symbol: str):
+def price(ctx: click.Context, symbol: str) -> None:
     """Show the latest mark price for a symbol."""
     symbol = symbol.upper()
-    logger.info("User requested mark price for %s.", symbol)
+    logger.info("price command | symbol=%s", symbol)
     with _make_client(ctx) as client:
         try:
             mark = client.get_symbol_price(symbol)
@@ -268,32 +309,31 @@ def price(ctx: click.Context, symbol: str):
 
     console.print(
         Panel(
-            f"[bold cyan]{symbol}[/bold cyan]  →  [bold yellow]{mark:,.8f} USDT[/bold yellow]",
-            title="  Mark Price",
+            f"[bold cyan]{symbol}[/bold cyan]   →   "
+            f"[bold yellow]{mark:,.4f} USDT[/bold yellow]",
+            title="Mark Price",
             border_style="cyan",
         )
     )
 
 
-# `ping` sub-command
+# `ping`-------------------------------
 @cli.command("ping")
 @click.pass_context
-def ping(ctx: click.Context):
+def ping(ctx: click.Context) -> None:
     """Check connectivity to the Binance Futures Testnet."""
-    logger.info("User initiated ping.")
+    logger.info("ping command called.")
     with _make_client(ctx) as client:
         ok = client.ping()
 
     if ok:
-        console.print(Panel("[bold green] Testnet is reachable![/bold green]", border_style="green"))
+        console.print(Panel("[bold green]  Testnet is reachable![/bold green]", border_style="green"))
     else:
-        console.print(Panel("[bold red] Cannot reach testnet.[/bold red]", border_style="red"))
+        console.print(Panel("[bold red]  Cannot reach testnet.[/bold red]", border_style="red"))
         sys.exit(1)
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
+# Entry point-----------------------------
 
 if __name__ == "__main__":
     cli()

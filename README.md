@@ -54,7 +54,7 @@ trading_bot/
 ```bash
 git clone https://github.com/<your-username>/trading-bot.git
 cd trading-bot
-python -m venv .venv
+python -m venv .venv or python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
