@@ -7,26 +7,22 @@ from bot.logging_config import get_logger
 
 
 
-
-
 """
 client.py — Binance Futures Testnet API client wrapper.
-
 Handles authentication (HMAC-SHA256), signed/unsigned requests,
 and base HTTP communication. All raw API interactions live here
 so the rest of the codebase never touches requests directly.
+"""
 
 # TODO: Add WebSocket support for real-time price streaming
 # TODO: Add connection pooling / session reuse for high-frequency trading
 # TODO: Support Ed25519 API keys (newer Binance key type)
 # TODO: Implement automatic rate-limit back-off based on response headers
-"""
-
 
 
 logger = get_logger(__name__)
 
-TESTNET_BASE_URL = "https://testnet.binancefuture.com"   # Binance USDT-M Futures Testnet base URL
+TESTNET_BASE_URL = "https://testnet.binancefuture.com"
 RECV_WINDOW = 5000  # milliseconds; how long the server accepts the request
 
 
@@ -46,7 +42,6 @@ class NetworkError(Exception):
 class BinanceFuturesClient:
     """
     Thin wrapper around the Binance USDT-M Futures Testnet REST API.
-
     Usage
     -----
     client = BinanceFuturesClient(api_key="...", api_secret="...")
@@ -62,10 +57,7 @@ class BinanceFuturesClient:
         # TODO: make timeout configurable via env / config file
         self._http = httpx.Client(timeout=10.0)
 
-    # ------------------------------------------------------------------
     # Internal helpers
-    # ------------------------------------------------------------------
-
     def _timestamp(self) -> int:
         return int(time.time() * 1000)
 
@@ -136,10 +128,7 @@ class BinanceFuturesClient:
 
         return data
 
-    # ------------------------------------------------------------------
     # Public API methods
-    # ------------------------------------------------------------------
-
     def ping(self) -> bool:
         """Return True if the testnet is reachable."""
         try:
@@ -159,7 +148,6 @@ class BinanceFuturesClient:
         """
         Return exchange info including all tradeable symbols and their
         filters (LOT_SIZE, PRICE_FILTER, MIN_NOTIONAL, etc.).
-
         # TODO: Cache this response with a short TTL to reduce latency
         """
         return self._get("/fapi/v1/exchangeInfo")
@@ -172,10 +160,14 @@ class BinanceFuturesClient:
     def get_account_balance(self) -> list[dict]:
         """
         Return a list of asset balances for the futures account.
-
         # TODO: Add a helper that returns only non-zero balances
         """
         return self._get("/fapi/v2/balance", signed=True)
+
+
+        # TODO: add stop_price for STOP_MARKET / STOP orders
+        # TODO: add reduce_only flag for closing positions
+        # TODO: add client_order_id for idempotent retries
 
     def place_order(
         self,
@@ -184,14 +176,10 @@ class BinanceFuturesClient:
         order_type: str,
         quantity: float,
         price: float | None = None,
-        time_in_force: str = "GTC",
-        # TODO: add stop_price for STOP_MARKET / STOP orders
-        # TODO: add reduce_only flag for closing positions
-        # TODO: add client_order_id for idempotent retries
-    ) -> dict:
+        time_in_force: str = "GTC",) -> dict:
+
         """
         Place a MARKET or LIMIT order on USDT-M Futures Testnet.
-
         Parameters
         ----------
         symbol        : e.g. "BTCUSDT"
@@ -201,6 +189,7 @@ class BinanceFuturesClient:
         price         : required for LIMIT orders
         time_in_force : "GTC" | "IOC" | "FOK"  (ignored for MARKET)
         """
+
         params: dict = {
             "symbol": symbol.upper(),
             "side": side.upper(),
@@ -225,7 +214,6 @@ class BinanceFuturesClient:
     def get_order(self, symbol: str, order_id: int) -> dict:
         """
         Fetch the current state of an existing order.
-
         # TODO: Add polling helper that waits until order is FILLED
         """
         return self._get(
@@ -237,7 +225,6 @@ class BinanceFuturesClient:
     def cancel_order(self, symbol: str, order_id: int) -> dict:
         """
         Cancel an open order.
-
         # TODO: Add cancel_all_orders(symbol) helper
         """
         params = {"symbol": symbol.upper(), "orderId": order_id}
